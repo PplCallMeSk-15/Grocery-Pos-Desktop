@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@variant dark (.dark &);
+
+:root, html {
+  color-scheme: light !important;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-100 text-slate-800 antialiased select-none;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Print specific styles for Receipts and Invoices */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .printable-area, .printable-area * {
+    visibility: visible !important;
+  }
+
+  .printable-area {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 12px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    z-index: 999999 !important;
+  }
+
+  /* Reset overflow and fixed heights on parent modal containers during print */
+  .fixed, .overflow-y-auto, .max-h-\[70vh\] {
+    position: static !important;
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+
+  .no-print, .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  @page {
+    margin: 5mm;
+    size: auto;
+  }
+}
+
+/* Custom smooth scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
+}

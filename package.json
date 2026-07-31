@@ -1,0 +1,85 @@
+{
+  "name": "grocery-pos-desktop",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Grocery POS & Inventory Management Software",
+  "author": "Your Name or Organization",
+  "main": "electron/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist server.js release",
+    "lint": "tsc --noEmit",
+    "electron:dev": "electron .",
+    "electron:build": "vite build && electron-builder",
+    "electron:pack": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.localbusiness.grocerypos",
+    "productName": "Grocery POS & Inventory Software",
+    "copyright": "Copyright © 2026 Your Name or Organization",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.js"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName} Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Grocery POS & Inventory Software",
+      "uninstallDisplayName": "Grocery POS & Inventory Software"
+    }
+  },
+  "dependencies": {
+    "@google/genai": "^2.4.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/qrcode": "^1.5.6",
+    "@vitejs/plugin-react": "^5.0.4",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "html5-qrcode": "^2.3.8",
+    "jsbarcode": "^3.12.3",
+    "jspdf": "^4.2.1",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "qrcode": "^1.5.4",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "vite": "^6.2.3"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jsbarcode": "^3.11.4",
+    "@types/node": "^22.14.0",
+    "autoprefixer": "^10.4.21",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.25.0",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.3"
+  }
+}
