@@ -14,7 +14,7 @@ A high-performance, **100% Offline-First Grocery POS, Inventory, and Billing Sys
 
 ## 🌐 Downloads
 
-- 🌍 **Official Website:** https://ppl-call-me-sk.web.app
+- 🌍 **Official Website:** https://sksoftware.web.app
 - 📦 **Latest GitHub Release:** https://github.com/PplCallMeSk-15/Grocery-Pos-Desktop/releases
 
 ---
