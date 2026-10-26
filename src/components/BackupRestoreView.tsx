@@ -28,9 +28,9 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
       if (content) {
         const success = onImportBackup(content);
         if (success) {
-          setStatusMsg({ type: 'success', text: 'Database successfully restored from backup file!' });
+          setStatusMsg({ type: 'success', text: 'Data successfully restored from JSON backup file!' });
         } else {
-          setStatusMsg({ type: 'error', text: 'Invalid database backup file format. Restore failed.' });
+          setStatusMsg({ type: 'error', text: 'Invalid JSON backup file. Restore failed.' });
         }
       }
     };
@@ -76,7 +76,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
               Export Database Backup File
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Download complete local SQLite database backup (<code className="font-mono bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">grocery_backup.db</code>) containing all product catalogs, stock logs, customer invoices, and shop settings.
+              Export a portable JSON backup (<code className="font-mono bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">grocery_pos_backup.json</code>) containing products, stock logs, sales, customers, and shop settings.
             </p>
           </div>
 
@@ -106,7 +106,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
           <input
             ref={fileInputRef}
             type="file"
-            accept=".json,.db,.sqlite"
+            accept=".json,application/json"
             onChange={handleFileChange}
             className="hidden"
           />

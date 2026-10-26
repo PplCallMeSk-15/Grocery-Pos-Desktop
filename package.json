@@ -14,7 +14,8 @@
     "lint": "tsc --noEmit",
     "electron:dev": "electron .",
     "electron:build": "vite build && electron-builder",
-    "electron:pack": "electron-builder --dir"
+    "electron:pack": "electron-builder --dir",
+    "postinstall": "electron-builder install-app-deps"
   },
   "build": {
     "appId": "com.localbusiness.grocerypos",
@@ -67,7 +68,8 @@
     "qrcode": "^1.5.4",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "better-sqlite3": "^12.2.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",

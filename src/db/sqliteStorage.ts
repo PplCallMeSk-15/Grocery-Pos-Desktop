@@ -1,6 +1,7 @@
 /**
- * Local Offline Storage Engine simulating SQLite schema tables.
- * Fully persistent, zero external dependencies, supports backup/restore as .sqlite / .db / .json.
+ * Local offline storage adapter.
+ * Electron desktop: records are JSON values stored in a native SQLite key/value table.
+ * Browser preview: records use localStorage as a development fallback. Portable backups remain JSON.
  */
 
 import { 
@@ -32,6 +33,35 @@ import {
   UpdatePackage
 } from '../types';
 
+// Electron uses a native SQLite file; browser preview keeps localStorage as a development fallback.
+declare global {
+  interface Window {
+    electronAPI?: {
+      isElectron?: boolean;
+      getStorageItem?: (key: string) => string | null;
+      setStorageItem?: (key: string, value: string) => boolean;
+    };
+  }
+}
+
+function readStorageItem(key: string): string | null {
+  if (typeof window !== 'undefined' && window.electronAPI?.isElectron && window.electronAPI.getStorageItem) {
+    return window.electronAPI.getStorageItem(key);
+  }
+  return localStorage.getItem(key);
+}
+
+function writeStorageItem(key: string, value: string): void {
+  if (typeof window !== 'undefined' && window.electronAPI?.isElectron && window.electronAPI.setStorageItem) {
+    if (!window.electronAPI.setStorageItem(key, value)) {
+      throw new Error(`SQLite write failed for storage key: ${key}`);
+    }
+    return;
+  }
+  localStorage.setItem(key, value);
+}
+
+
 const STORAGE_KEYS = {
   SETTINGS: 'grocery_pos_settings_v1',
   PRODUCTS: 'grocery_pos_products_v1',
@@ -62,7 +92,7 @@ export const INITIAL_SAMPLE_BRANCHES: Branch[] = [
     name: 'Main Supermarket Branch',
     code: 'MAIN',
     address: 'Shop No. 12, Main Market Road, Sector 4, Bangalore',
-    phone: '+91 98765 00000',
+    phone: '',
     isPrimary: true,
   },
   {
@@ -115,13 +145,13 @@ export const INITIAL_SAMPLE_UPDATES: UpdatePackage[] = [
 
 // Initial default shop settings
 export const DEFAULT_SETTINGS: ShopSettings = {
-  shopName: 'Green Grocery & Supermarket',
-  ownerName: 'Rajesh Kumar',
-  address: 'Shop No. 12, Main Market Road, Sector 4, Bangalore - 560001',
+  shopName: 'متجري',
+  ownerName: '',
+  address: '',
   phone: '+91 98765 00000',
-  gstNumber: '29XXXXX0000X1Z5',
+  gstNumber: '',
   invoicePrefix: 'INV',
-  currencySymbol: '₹',
+  currencySymbol: 'دج',
   defaultTaxPercent: 0,
   lowStockThreshold: 10,
   receiptType: 'thermal',
@@ -132,14 +162,14 @@ export const DEFAULT_SETTINGS: ShopSettings = {
   backupFrequency: 'daily',
   requireManagerPinForDiscount: true,
   discountThresholdPercent: 15,
-  enableLoyalty: true,
-  loyaltyPointRatio: 100, // 1 pt per ₹100
+  enableLoyalty: false,
+  loyaltyPointRatio: 100, // 1 point per 100 DZD
   // UPI Payment Default Settings
-  enableUpiPayments: true,
-  merchantName: 'Green Grocery & Supermarket',
-  upiId: 'merchant@upi',
-  defaultPaymentNote: 'Thank you for shopping at Green Grocery!',
-  upiReceiptFooter: 'QR Payment Completed via Dynamic UPI',
+  enableUpiPayments: false,
+  merchantName: '',
+  upiId: '',
+  defaultPaymentNote: 'شكراً لثقتكم بنا',
+  upiReceiptFooter: '',
   merchantLogo: '',
 };
 
@@ -603,6 +633,21 @@ class SQLiteStorageEngine {
 
   constructor() {
     this.settings = this.loadData(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
+    // Normalize untouched India-specific demo defaults for the Algerian edition.
+    if (this.settings.currencySymbol === '₹' || !this.settings.currencySymbol) {
+      this.settings.currencySymbol = 'دج';
+      this.settings.enableUpiPayments = false;
+      if (this.settings.upiId === 'merchant@upi') this.settings.upiId = '';
+      if (this.settings.merchantName === 'Green Grocery & Supermarket') this.settings.merchantName = '';
+      if (this.settings.upiReceiptFooter === 'QR Payment Completed via Dynamic UPI') this.settings.upiReceiptFooter = '';
+      if (this.settings.defaultPaymentNote === 'Thank you for shopping at Green Grocery!') this.settings.defaultPaymentNote = 'شكراً لثقتكم بنا';
+      if (this.settings.shopName === 'Green Grocery & Supermarket') this.settings.shopName = 'متجري';
+      if (this.settings.ownerName === 'Rajesh Kumar') this.settings.ownerName = '';
+      if (this.settings.address.includes('Bangalore')) this.settings.address = '';
+      if (this.settings.phone.startsWith('+91')) this.settings.phone = '';
+      if (this.settings.gstNumber?.startsWith('29')) this.settings.gstNumber = '';
+      this.persistSettings();
+    }
     this.products = this.loadData(STORAGE_KEYS.PRODUCTS, INITIAL_SAMPLE_PRODUCTS);
     this.sales = this.loadData(STORAGE_KEYS.SALES, INITIAL_SAMPLE_SALES);
     this.stockLogs = this.loadData(STORAGE_KEYS.STOCK_LOGS, []);
@@ -631,9 +676,20 @@ class SQLiteStorageEngine {
   }
 
   private loadData<T>(key: string, defaultValue: T): T {
-    const raw = localStorage.getItem(key);
+    const raw = readStorageItem(key);
     if (!raw) {
-      localStorage.setItem(key, JSON.stringify(defaultValue));
+      // One-time per-key migration from the previous Electron localStorage database.
+      const legacyRaw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+      if (legacyRaw) {
+        try {
+          const legacyValue = JSON.parse(legacyRaw) as T;
+          writeStorageItem(key, legacyRaw);
+          return legacyValue;
+        } catch {
+          // Ignore invalid legacy data and initialize a clean default below.
+        }
+      }
+      writeStorageItem(key, JSON.stringify(defaultValue));
       return defaultValue;
     }
     try {
@@ -667,7 +723,7 @@ class SQLiteStorageEngine {
 
   public saveSettings(newSettings: Partial<ShopSettings>): ShopSettings {
     this.settings = { ...this.settings, ...newSettings };
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(this.settings));
+    writeStorageItem(STORAGE_KEYS.SETTINGS, JSON.stringify(this.settings));
     this.addAuditLog(this.currentUser?.name || 'System', 'Update Settings', 'Shop settings updated');
     return this.settings;
   }
@@ -1950,27 +2006,27 @@ class SQLiteStorageEngine {
   }
 
   // --- Persistence Handlers ---
-  private persistSettings() { localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(this.settings)); }
-  private persistProducts() { localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(this.products)); }
-  private persistSales() { localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(this.sales)); }
-  private persistStockLogs() { localStorage.setItem(STORAGE_KEYS.STOCK_LOGS, JSON.stringify(this.stockLogs)); }
-  private persistCustomers() { localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(this.customers)); }
-  private persistSuppliers() { localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(this.suppliers)); }
-  private persistPurchaseOrders() { localStorage.setItem(STORAGE_KEYS.PURCHASE_ORDERS, JSON.stringify(this.purchaseOrders)); }
-  private persistExpenses() { localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(this.expenses)); }
-  private persistEmployees() { localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(this.employees)); }
-  private persistAttendance() { localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(this.attendance)); }
-  private persistHeldBills() { localStorage.setItem(STORAGE_KEYS.HELD_BILLS, JSON.stringify(this.heldBills)); }
-  private persistReturns() { localStorage.setItem(STORAGE_KEYS.RETURNS, JSON.stringify(this.returns)); }
-  private persistAuditLogs() { localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(this.auditLogs)); }
-  private persistBranches() { localStorage.setItem(STORAGE_KEYS.BRANCHES, JSON.stringify(this.branches)); }
-  private persistCashShifts() { localStorage.setItem(STORAGE_KEYS.CASH_SHIFTS, JSON.stringify(this.cashShifts)); }
-  private persistCashTxns() { localStorage.setItem(STORAGE_KEYS.CASH_TXNS, JSON.stringify(this.cashTxns)); }
-  private persistPriceHistory() { localStorage.setItem(STORAGE_KEYS.PRICE_HISTORY, JSON.stringify(this.priceHistory)); }
-  private persistCategories() { localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(this.categories)); }
-  private persistCustomerLedgers() { localStorage.setItem(STORAGE_KEYS.CUSTOMER_LEDGERS, JSON.stringify(this.customerLedgers)); }
-  private persistRecycleBin() { localStorage.setItem(STORAGE_KEYS.RECYCLE_BIN, JSON.stringify(this.recycleBin)); }
-  private persistUpdates() { localStorage.setItem(STORAGE_KEYS.UPDATES, JSON.stringify(this.updates)); }
+  private persistSettings() { writeStorageItem(STORAGE_KEYS.SETTINGS, JSON.stringify(this.settings)); }
+  private persistProducts() { writeStorageItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(this.products)); }
+  private persistSales() { writeStorageItem(STORAGE_KEYS.SALES, JSON.stringify(this.sales)); }
+  private persistStockLogs() { writeStorageItem(STORAGE_KEYS.STOCK_LOGS, JSON.stringify(this.stockLogs)); }
+  private persistCustomers() { writeStorageItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(this.customers)); }
+  private persistSuppliers() { writeStorageItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(this.suppliers)); }
+  private persistPurchaseOrders() { writeStorageItem(STORAGE_KEYS.PURCHASE_ORDERS, JSON.stringify(this.purchaseOrders)); }
+  private persistExpenses() { writeStorageItem(STORAGE_KEYS.EXPENSES, JSON.stringify(this.expenses)); }
+  private persistEmployees() { writeStorageItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(this.employees)); }
+  private persistAttendance() { writeStorageItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(this.attendance)); }
+  private persistHeldBills() { writeStorageItem(STORAGE_KEYS.HELD_BILLS, JSON.stringify(this.heldBills)); }
+  private persistReturns() { writeStorageItem(STORAGE_KEYS.RETURNS, JSON.stringify(this.returns)); }
+  private persistAuditLogs() { writeStorageItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(this.auditLogs)); }
+  private persistBranches() { writeStorageItem(STORAGE_KEYS.BRANCHES, JSON.stringify(this.branches)); }
+  private persistCashShifts() { writeStorageItem(STORAGE_KEYS.CASH_SHIFTS, JSON.stringify(this.cashShifts)); }
+  private persistCashTxns() { writeStorageItem(STORAGE_KEYS.CASH_TXNS, JSON.stringify(this.cashTxns)); }
+  private persistPriceHistory() { writeStorageItem(STORAGE_KEYS.PRICE_HISTORY, JSON.stringify(this.priceHistory)); }
+  private persistCategories() { writeStorageItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(this.categories)); }
+  private persistCustomerLedgers() { writeStorageItem(STORAGE_KEYS.CUSTOMER_LEDGERS, JSON.stringify(this.customerLedgers)); }
+  private persistRecycleBin() { writeStorageItem(STORAGE_KEYS.RECYCLE_BIN, JSON.stringify(this.recycleBin)); }
+  private persistUpdates() { writeStorageItem(STORAGE_KEYS.UPDATES, JSON.stringify(this.updates)); }
 
   // --- Backup & Restore ---
   public exportBackupJSON(): string {
